@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Помощник СДА - Интеллектуальный юридический ассистент</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --primary: #1a237e;
+            --primary-light: #283593;
+            --accent: #3949ab;
+            --text: #333;
+            --text-light: #666;
+            --bg: #f8f9fa;
+            --white: #fff;
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+        
+        /* Hero Section */
+        .hero {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: white;
+            padding: 40px 20px;
+            text-align: center;
+        }
+        
+        .hero-logo {
+            width: 80px;
+            height: 80px;
+            border-radius: 16px;
+            margin-bottom: 16px;
+        }
+        
+        .hero h1 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+        
+        .hero p {
+            font-size: 16px;
+            opacity: 0.9;
+            max-width: 500px;
+            margin: 0 auto;
+            line-height: 1.5;
+        }
+        
+        /* Features */
+        .features {
+            padding: 40px 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .features h2 {
+            text-align: center;
+            font-size: 22px;
+            margin-bottom: 24px;
+            color: var(--primary);
+        }
+        
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+        }
+        
+        .feature-card {
+            background: var(--white);
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+        }
+        
+        .feature-icon {
+            font-size: 32px;
+            margin-bottom: 12px;
+        }
+        
+        .feature-card h3 {
+            font-size: 16px;
+            margin-bottom: 8px;
+            color: var(--primary);
+        }
+        
+        .feature-card p {
+            font-size: 14px;
+            color: var(--text-light);
+            line-height: 1.5;
+        }
+        
+        /* Quick Actions */
+        .quick-actions {
+            padding: 20px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .quick-actions h3 {
+            text-align: center;
+            font-size: 18px;
+            margin-bottom: 16px;
+        }
+        
+        .action-btns {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+        }
+        
+        .action-btn {
+            background: var(--white);
+            border: 1px solid #ddd;
+            padding: 12px 20px;
+            border-radius: 24px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: var(--text);
+        }
+        
+        .action-btn:hover {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+        
+        /* CTA */
+        .cta {
+            background: var(--white);
+            padding: 40px 20px;
+            text-align: center;
+            border-top: 1px solid #eee;
+        }
+        
+        .cta h2 {
+            font-size: 24px;
+            margin-bottom: 12px;
+            color: var(--primary);
+        }
+        
+        .cta p {
+            color: var(--text-light);
+            margin-bottom: 20px;
+        }
+        
+        .open-chat-btn {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: white;
+            border: none;
+            padding: 16px 32px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .open-chat-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(26, 35, 126, 0.3);
+        }
+        
+        /* Input Area */
+        .input-section {
+            background: var(--white);
+            padding: 24px 20px;
+            border-top: 1px solid #eee;
+        }
+        
+        .input-wrapper {
+            max-width: 600px;
+            margin: 0 auto;
+            display: flex;
+            gap: 12px;
+        }
+        
+        .input-wrapper input {
+            flex: 1;
+            padding: 14px 18px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 15px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        
+        .input-wrapper input:focus {
+            border-color: var(--primary);
+        }
+        
+        .input-wrapper button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 14px 24px;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .input-wrapper button:hover {
+            background: var(--primary-light);
+        }
+        
+        /* Footer */
+        .footer {
+            background: #1a1a1a;
+            color: #888;
+            padding: 20px;
+            text-align: center;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Hero -->
+    <div class="hero">
+        <img src="academy.png" class="hero-logo" alt="Логотип СДА">
+        <h1>Помощник Сретенской академии</h1>
+        <p>Интеллектуальный юридический ассистент на основе RAG. Отвечу на вопросы о правилах, положениях и документах академии.</p>
+    </div>
+    
+    <!-- Features -->
+    <div class="features">
+        <h2>Что я умею</h2>
+        <div class="feature-grid">
+            <div class="feature-card">
+                <div class="feature-icon">📋</div>
+                <h3>Юридические консультации</h3>
+                <p>Отвечаю на вопросы о правилах академии на основе нормативных документов</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">📄</div>
+                <h3>Шаблоны прошений</h3>
+                <p>Подберу нужный бланк заявления и помогу с оформлением</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🔗</div>
+                <h3>Проверенные ссылки</h3>
+                <p>Даю только реальные ссылки на документы сайта академии</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">💬</div>
+                <h3>Веб-чат</h3>
+                <p>Удобный интерфейс как в ChatGPT прямо в браузере</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Quick Questions -->
+    <div class="quick-actions">
+        <h3>Популярные вопросы</h3>
+        <div class="action-btns">
+            <button class="action-btn" onclick="setQuestion('Как оформить академический отпуск?')">Академ отпуск</button>
+            <button class="action-btn" onclick="setQuestion('Правила отчисления студентов')">Отчисление</button>
+            <button class="action-btn" onclick="setQuestion('Какие есть стипендии?')">Стипендии</button>
+            <button class="action-btn" onclick="setQuestion('Как получить справку об обучении?')">Справка</button>
+            <button class="action-btn" onclick="setQuestion('Общежитие и проживание')">Общежитие</button>
+            <button class="action-btn" onclick="setQuestion('Сессия и пересдачи')">Сессия</button>
+        </div>
+    </div>
+    
+    <!-- Input -->
+    <div class="input-section">
+        <div class="input-wrapper">
+            <input type="text" id="question" placeholder="Задайте свой вопрос..." onkeydown="if(event.key==='Enter')ask()">
+            <button onclick="ask()">Спросить</button>
+        </div>
+    </div>
+    
+    <!-- CTA -->
+    <div class="cta">
+        <h2>Нужна консультация?</h2>
+        <p>Откройте чат в Telegram для более удобного общения</p>
+        <button class="open-chat-btn" onclick="openTelegram()">
+            💬 Открыть в Telegram
+        </button>
+    </div>
+    
+    <!-- Footer -->
+    <div class="footer">
+        Создано магистрантом СДА | Курсовая работа ВШЭ | Руководитель: Касьяненко Д.А.
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        
+        function setQuestion(text) {
+            document.getElementById('question').value = text;
+            ask();
+        }
+        
+        function ask() {
+            const question = document.getElementById('question').value.trim();
+            if (!question) return;
+            
+            // Send via Telegram if available, otherwise alert
+            if (tg && tg.sendData) {
+                tg.sendData(JSON.stringify({ question }));
+                tg.close();
+            } else {
+                alert('Откройте через Telegram для отправки вопроса');
+            }
+        }
+        
+        function openTelegram() {
+            const botUsername = 'YOUR_BOT_USERNAME'; // Заменить на username бота
+            window.location.href = 'https://t.me/' + botUsername;
+        }
+    </script>
+</body>
+</html>
