@@ -169,15 +169,47 @@ def clean_document_name(filename: str) -> str:
     return name if name else filename
 
 def find_link_in_index(query: str) -> list:
+    """Умный маршрутизатор по глубоким разделам сайта СДА"""
     query_lower = query.lower()
     results =[]
+    
+    # 1. ЖЕСТКИЕ ГЛУБОКИЕ ССЫЛКИ (Сведения об образовательной организации)
+    if any(w in query_lower for w in['документ', 'устав', 'лиценз', 'аккредитац', 'правил', 'порядок', 'отчисл', 'перевод', 'восстановлен']):
+        results.append({'title': '📄 Документы (Сведения об образовательной организации)', 'url': 'https://sdamp.ru/sveden/document/'})
+    
+    if any(w in query_lower for w in['платн', 'договор', 'стоимость', 'оплат', 'снижен']):
+        results.append({'title': '💳 Платные образовательные услуги', 'url': 'https://sdamp.ru/sveden/paid_edu/'})
+        
+    if any(w in query_lower for w in['стипенди', 'материальн', 'пособи', 'поддержк', 'общежити']):
+        results.append({'title': '💰 Стипендии и меры поддержки обучающихся', 'url': 'https://sdamp.ru/sveden/grants/'})
+        
+    if any(w in query_lower for w in['поступлен', 'прием', 'абитуриент', 'экзамен', 'комисси']):
+        results.append({'title': '🎓 Абитуриенту (Поступающим)', 'url': 'https://sdamp.ru/abitur/'})
+        
+    if any(w in query_lower for w in['расписани', 'календар', 'график', 'сесси']):
+        results.append({'title': '📅 Образование (Расписание и учебные графики)', 'url': 'https://sdamp.ru/sveden/education/'})
+        
+    if any(w in query_lower for w in['структур', 'руководств', 'ректорат', 'кафедр', 'деканат']):
+        results.append({'title': '🏛 Структура и органы управления', 'url': 'https://sdamp.ru/sveden/struct/'})
+        results.append({'title': '👨‍🏫 Руководство и педагогический состав', 'url': 'https://sdamp.ru/sveden/managers/'})
+
+    if any(w in query_lower for w in['эиос', 'портал', 'электрон', 'сдо']):
+        results.append({'title': '💻 Вход в ЭИОС СДА', 'url': 'https://eios.sdamp.ru'})
+    
+    # 2. Поиск по JSON (на случай, если ты позже спарсишь сайт в файл)
     for page in site_index.get('pages',[]):
-        if query_lower in page.get('title', '').lower() or query_lower in page.get('url', '').lower():
+        if query_lower in page.get('title', '').lower():
             results.append({'title': page.get('title', 'Страница'), 'url': page.get('url', '')})
-    for doc in site_index.get('documents',[]):
-        if query_lower in doc.get('name', '').lower():
-            results.append({'title': doc.get('name', 'Документ'), 'url': doc.get('url', '')})
-    return results[:5]
+            
+    # Удаляем дубликаты и оставляем самые релевантные
+    unique_results =[]
+    seen_urls = set()
+    for r in results:
+        if r['url'] not in seen_urls:
+            unique_results.append(r)
+            seen_urls.add(r['url'])
+            
+    return unique_results[:3] # Отдаем топ-3 самых точных ссылки
 
 def extract_keywords(query: str) -> list:
     stop_words = {'как', 'что', 'где', 'когда', 'почему', 'можно', 'нужно', 'могу', 'ли', 'или', 'и', 'в', 'на', 'по', 'для', 'при', 'о', 'об'}
@@ -293,7 +325,7 @@ SYSTEM_PROMPT = """
 📖 **ПРАВОВОЕ ОБОСНОВАНИЕ** [Развернутый анализ со ссылками на конкретные пункты]
 📋 **ПОРЯДОК ДЕЙСТВИЙ** (если применимо)
 📎 **ДОКУМЕНТЫ** •[Название документа, номер, пункт]
-🔗 **ССЫЛКИ НА САЙТ** •[Проверенная ссылка на страницу сайта sdamp.ru, если релевантно]
+🔗 **ССЫЛКИ НА САЙТ** •[Используй прямые глубокие ссылки, которые переданы тебе в блоке "РЕЛЕВАНТНЫЕ ССЫЛКИ НА САЙТЕ"]
 
 2. ГЛУБОКИЙ ПОИСК: Анализируй ВСЕ найденные фрагменты
 3. ПРОВЕРКА ССЫЛОК: НЕ выдумывай ссылки — используй ТОЛЬКО те, что найдены в контексте или индексе сайта.
