@@ -20,7 +20,7 @@ try:
 except:
     YANDEX_API_KEY = os.getenv("YANDEX_API_KEY", "")
 
-FOLDER_ID = os.getenv("FOLDER_ID", "b1g4b3ft2i3eiql7k3p4")
+FOLDER_ID = os.getenv("FOLDER_ID", "b1g6jhk9eapudn6lom6c")
 DB_PATH = os.getenv("DB_PATH", "sretensk_db")
 TEMPLATES_PATH = os.getenv("TEMPLATES_PATH", "docs/templates")
 SITE_INDEX_FILE = "docs/site_index.json"
