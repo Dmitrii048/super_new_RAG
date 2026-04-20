@@ -29,78 +29,92 @@ DB_FILE = "chat_history.db"
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# === 2. НАСТРОЙКА ИНТЕРФЕЙСА СТРИМЛИТ (СТИЛЬ СДА) ===
+# === 2. НАСТРОЙКА ИНТЕРФЕЙСА СТРИМЛИТ (ПРЕМИУМ СТИЛЬ СДА) ===
 st.set_page_config(page_title="Юридический ассистент СДА", page_icon="🎓", layout="centered")
 
 st.markdown("""
     <style>
+    /* Прячем технические элементы Streamlit (меню, хедер, футер) */
     #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
     header {visibility: hidden;}
+    footer {visibility: hidden;}
     
-    .stApp { background-color: #f9f9f4; }
+    /* Делаем фон страницы чуть теплее, академичнее */
+    .stApp { background-color: #FCFCFA; }
     
-    .sda-header {
-        background: url('https://sdamp.ru/bitrix/templates/main/img/header/day_spring.png') center/cover no-repeat;
-        padding: 40px 20px;
-        text-align: center;
-        border-bottom: 8px solid #942927; 
-        margin-top: -80px;
-        margin-bottom: 30px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    }
-    
-    .sda-header-container {
+    /* --- НОВЫЙ ДИЗАЙН БАННЕРА --- */
+    .sda-banner {
+        /* Плавный градиент от белого к прозрачному + фото храма */
+        background: linear-gradient(90deg, rgba(255,255,255,1) 0%, rgba(255,255,255,0.9) 45%, rgba(255,255,255,0) 100%), 
+                    url('https://sdamp.ru/bitrix/templates/main/img/header/day_spring.png');
+        background-size: cover;
+        background-position: right center;
+        border-left: 8px solid #942927; /* Фирменная бордовая полоса СДА */
+        border-radius: 10px;
+        padding: 35px 30px;
         display: flex;
         align-items: center;
-        justify-content: center;
-        max-width: 900px;
-        margin: 0 auto;
-        gap: 30px;
-        background: rgba(255, 255, 255, 0.85); 
-        padding: 20px 40px;
-        border-radius: 15px;
+        gap: 25px;
+        margin-top: -60px;
+        margin-bottom: 30px;
+        box-shadow: 0 6px 15px rgba(0,0,0,0.08);
     }
     
-    .sda-logo { width: 140px; }
+    .sda-logo {
+        width: 105px;
+        height: auto;
+        flex-shrink: 0;
+        filter: drop-shadow(0px 4px 6px rgba(0,0,0,0.1)); /* Легкая тень для логотипа */
+    }
+    
+    .sda-text-block {
+        display: flex;
+        flex-direction: column;
+    }
     
     .sda-title {
-        color: #942927; 
-        font-family: "Times New Roman", Times, serif;
-        font-size: 28px; 
-        font-weight: bold; 
+        font-family: 'Times New Roman', Times, serif;
+        color: #1a2a44; /* Темно-синий строгий цвет */
+        font-size: 26px;
+        font-weight: 900;
+        margin: 0;
+        line-height: 1.15;
         text-transform: uppercase;
-        line-height: 1.2; 
-        margin: 0; 
-        text-align: left;
+        letter-spacing: 0.5px;
     }
     
     .sda-subtitle {
-        color: #333; 
-        font-size: 18px; 
+        font-family: 'Arial', sans-serif;
+        color: #942927; /* Бордовый акцент */
+        font-size: 15px;
         margin-top: 10px;
-        font-family: Arial, sans-serif; 
-        text-align: left;
-        border-top: 1px solid #ccc; 
-        padding-top: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 1px;
     }
     
-    .stChatMessage { border-radius: 10px; border: 1px solid #e0e0e0; }
+    /* Слегка улучшаем внешний вид сообщений чата */
+    .stChatMessage { 
+        border-radius: 8px; 
+        padding: 10px;
+    }
+    
+    /* Отступ для поля ввода внизу */
+    .stChatInputContainer {
+        padding-bottom: 20px !important;
+    }
     </style>
-""", unsafe_allow_html=True)
 
-st.markdown("""
-    <div class="sda-header">
-        <div class="sda-header-container">
-            <div>
-                <h1 class="sda-title">Московская Сретенская<br>Духовная Академия</h1>
-                <div class="sda-subtitle">Интеллектуальный юридический ассистент</div>
-            </div>
-            <img class="sda-logo" src="https://sdamp.ru/bitrix/templates/main/img/logo.png" alt="Логотип СДА">
+    <div class="sda-banner">
+        <img class="sda-logo" src="https://sdamp.ru/bitrix/templates/main/img/logo.png" alt="Логотип СДА">
+        <div class="sda-text-block">
+            <div class="sda-title">Московская Сретенская<br>Духовная Академия</div>
+            <div class="sda-subtitle">Интеллектуальный Юридический Ассистент</div>
         </div>
     </div>
 """, unsafe_allow_html=True)
 
+# Уникальный ID сессии пользователя для сохранения в БД (ДАЛЬШЕ ИДЕТ ТВОЙ КОД БЕЗ ИЗМЕНЕНИЙ)
 # Уникальный ID сессии пользователя для сохранения в БД
 if "user_id" not in st.session_state:
     st.session_state.user_id = str(uuid.uuid4())
