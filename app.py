@@ -20,7 +20,6 @@ try:
 except:
     YANDEX_API_KEY = os.getenv("YANDEX_API_KEY", "")
 
-# ИСПРАВЛЕННЫЙ FOLDER ID (Рабочий)
 FOLDER_ID = os.getenv("FOLDER_ID", "b1g6jhk9eapudn6lom6c")
 
 DB_PATH = os.getenv("DB_PATH", "sretensk_db")
@@ -36,12 +35,10 @@ st.set_page_config(page_title="Юридический ассистент СДА"
 
 st.markdown("""
     <style>
-    /* Скрываем технические элементы Streamlit */
     #MainMenu {visibility: hidden;}
     header {visibility: hidden;}
     footer {visibility: hidden;}
     
-    /* Жестко убираем пустые места сверху и снизу страницы */
     .block-container {
         padding-top: 1rem !important;
         padding-bottom: 1rem !important;
@@ -50,7 +47,6 @@ st.markdown("""
     
     .stApp { background-color: #FCFCFA; }
     
-    /* Дизайн баннера СДА */
     .sda-banner {
         background: linear-gradient(90deg, rgba(255,255,255,1) 0%, rgba(255,255,255,0.95) 50%, rgba(255,255,255,0) 100%), 
                     url('https://sdamp.ru/bitrix/templates/main/img/header/day_spring.png');
@@ -83,7 +79,6 @@ st.markdown("""
         font-weight: 600; text-transform: uppercase; letter-spacing: 1px;
     }
     
-    /* Стилизация сообщений чата */
     .stChatMessage { border-radius: 12px; padding: 15px; border: 1px solid #eaeaea; margin-bottom: 10px; }
     .stButton>button { 
         background-color: #f0f2f6; 
@@ -106,11 +101,10 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# Идентификатор пользователя для логов
 if "user_id" not in st.session_state:
     st.session_state.user_id = str(uuid.uuid4())
 
-# === 3. БАЗА ДАННЫХ SQLITE ДЛЯ ИСТОРИИ ===
+# === 3. БАЗА ДАННЫХ SQLITE ===
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     conn.execute('''CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, username TEXT, question TEXT, answer TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)''')
@@ -136,7 +130,7 @@ def save_feedback(user_id, question, is_positive):
         conn.close()
     except Exception as e: logger.error(f"Ошибка БД (оценки): {e}")
 
-# === 4. ЗАГРУЗКА БАЗЫ ЗНАНИЙ ===
+# === 4. ЗАГРУЗКА РЕСУРСОВ ===
 @st.cache_resource
 def load_resources():
     site_index = {'pages':[], 'documents':[]}
@@ -144,13 +138,16 @@ def load_resources():
         try:
             with open(SITE_INDEX_FILE, 'r', encoding='utf-8') as f:
                 site_index = json.load(f)
+            logger.info("✅ Индекс сайта успешно загружен")
         except: pass
 
+    logger.info("⏳ Инициализация эмбеддингов...")
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+    
     if os.path.exists(DB_PATH):
         db = FAISS.load_local(DB_PATH, embeddings, allow_dangerous_deserialization=True)
     else:
-        st.error(f"⚠️ Критическая ошибка: База знаний '{DB_PATH}' не найдена!")
+        st.error(f"⚠️ Критическая ошибка: База {DB_PATH} не найдена на сервере!")
         return None, site_index
 
     t_db_path = DB_PATH + "_templates"
@@ -162,50 +159,39 @@ def load_resources():
 
 db, site_index = load_resources()
 
-# === 5. ПАРСИНГ САЙТА В РЕАЛЬНОМ ВРЕМЕНИ (LIVE SCRAPING) ===
+# === 5. ПАРСИНГ САЙТА В РЕАЛЬНОМ ВРЕМЕНИ ===
 def scrape_website_content(url: str) -> str:
-    """Заходит на сайт СДА, читает текст и отдает ИИ для актуальности фактов"""
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
         response = requests.get(url, headers=headers, timeout=5)
         response.encoding = 'utf-8'
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
-            # Удаляем скрипты и стили из HTML
             for script in soup(["script", "style", "header", "footer", "nav"]):
                 script.extract()
             text = soup.get_text(separator=' ', strip=True)
-            return text[:3500] # Ограничиваем, чтобы не перегрузить токен-лимит
+            return text[:3500] 
     except Exception as e:
-        logger.error(f"Ошибка парсинга сайта {url}: {e}")
+        logger.error(f"Ошибка парсинга {url}: {e}")
     return ""
 
 # === 6. ЛОГИКА ПОИСКА И ОЧИСТКИ ТЕКСТОВ ===
 def clean_document_name(filename: str) -> str:
-    """Тотальная очистка технических имен файлов для превращения их в красивые ссылки"""
     name = urllib.parse.unquote(filename)
-    # Убираем расширения
     name = re.sub(r'\.(docx?|pdf|txt)$', '', name, flags=re.IGNORECASE)
-    # Убираем все виды подчеркиваний и тире, делаем пробелы
     name = name.replace('_', ' ').replace('-', ' ')
-    # Разлепляем слипшиеся слова (ПоложениеО -> Положение О)
     name = re.sub(r'([а-яёa-z])([А-ЯЁA-Z])', r'\1 \2', name)
-    # Убираем приставки
     name = re.sub(r'^[\d\s]*СДА\s*', '', name, flags=re.IGNORECASE)
     name = re.sub(r'^[\d\.\s]+', '', name)
-    # Убираем мусор из названий (ДОПОЛНЕНО, Журнал и т.д.)
     name = re.sub(r'ДОПОЛНЕНО.*', '', name, flags=re.IGNORECASE)
     name = re.sub(r'Журнал.*', '', name, flags=re.IGNORECASE)
-    # Возвращаем даты к нормальному виду
     name = re.sub(r'(?<!от\s)(\d{2})\s(\d{2})\s(\d{4})', r'от \1.\2.\3', name)
-    # Финальная зачистка пробелов
     name = re.sub(r'\s+', ' ', name).strip()
     return name.capitalize() if name else "Нормативный документ СДА"
 
 def find_link_in_index(query: str) -> list:
-    """Умный маршрутизатор по ключевым разделам сайта sdamp.ru"""
     q = query.lower()
-    res = []
+    res =[]
     
     mapping = {
         'document': (['документ', 'устав', 'лиценз', 'аккредитац', 'локальн', 'приказ', 'положен'], 'https://sdamp.ru/sveden/document/'),
@@ -225,7 +211,7 @@ def find_link_in_index(query: str) -> list:
         if q in page.get('title', '').lower():
             res.append({'title': page.get('title'), 'url': page.get('url')})
             
-    unique_res, seen = [], set()
+    unique_res, seen =[], set()
     for item in res:
         if item['url'] not in seen:
             unique_res.append(item); seen.add(item['url'])
@@ -235,28 +221,25 @@ def find_link_in_index(query: str) -> list:
 def extract_keywords(query: str) -> list:
     stop_words = {'как', 'что', 'где', 'когда', 'почему', 'можно', 'нужно', 'могу', 'ли', 'или', 'подскаж'}
     words = re.findall(r'\b[а-яёА-ЯЁ]{4,}\b', query.lower())
-    return [w for w in words if w not in stop_words]
+    return[w for w in words if w not in stop_words]
 
 def extract_document_references(docs: list) -> list:
-    references = []
+    references =[]
     patterns = [r'[Пп]оложение[а-яё\s]*["«]([^"]+)["»]', r'[Пп]риказ[а-яё\s]*№?\s*\d+.*["«]([^"]+)["»]']
     for doc in docs:
         for p in patterns: references.extend(re.findall(p, doc['content']))
     return list(set(references))[:10]
 
 def iterative_search(query: str):
-    """Итеративный RAG-поиск в 3 этапа"""
-    if not db: return [], set()
+    if not db: return[], set()
     found_docs, sources_set =[], set()
     
-    # 1. Прямой смысловой поиск
     docs_s1 = db.similarity_search(query, k=12)
     for d in docs_s1:
         s = clean_document_name(os.path.basename(d.metadata.get('source', 'Неизвестный')))
         sources_set.add(s)
         found_docs.append({'source': s, 'content': d.page_content, 'stage': 1})
     
-    # 2. Поиск по ключевым словам
     for term in extract_keywords(query)[:3]:
         for d in db.similarity_search(term, k=5):
             s = clean_document_name(os.path.basename(d.metadata.get('source', 'Неизвестный')))
@@ -264,7 +247,6 @@ def iterative_search(query: str):
                 sources_set.add(s)
                 found_docs.append({'source': s, 'content': d.page_content, 'stage': 2})
     
-    # 3. Поиск связанных документов (ссылки внутри текста)
     for doc_ref in extract_document_references(found_docs)[:5]:
         for d in db.similarity_search(doc_ref, k=4):
             s = clean_document_name(os.path.basename(d.metadata.get('source', 'Неизвестный')))
@@ -275,7 +257,6 @@ def iterative_search(query: str):
     return found_docs, sources_set
 
 def find_template(user_query: str) -> str | None:
-    """Поиск файлов Word (шаблонов заявлений) для скачивания"""
     if not os.path.exists(TEMPLATES_PATH): return None
     templates = os.listdir(TEMPLATES_PATH)
     q = user_query.lower()
@@ -292,19 +273,38 @@ def find_template(user_query: str) -> str | None:
     return None
 
 def parse_suggestions(answer: str) -> list:
-    """Вытаскивает Уточняющие вопросы из ответа ИИ для создания кнопок"""
+    """Бронебойный парсер: вытаскивает вопросы в формате кнопок, как бы ИИ их ни написал"""
     suggestions =[]
-    match = re.search(r'(🎯\s*УТОЧНЯЮЩИЕ\s*ВОПРОСЫ[:\s]*\n?)(.+)', answer, re.IGNORECASE | re.DOTALL)
+    
+    # Пытаемся найти блок "УТОЧНЯЮЩИЕ ВОПРОСЫ"
+    match = re.search(r'УТОЧНЯЮЩИЕ\s*ВОПРОСЫ[:\s]*\n*(.+)', answer, re.IGNORECASE | re.DOTALL)
     if match:
-        questions = re.findall(r'\[([^\]]+)\]|\b([А-Яа-яёЁ].*?\?)', match.group(2).strip())
-        for q in questions:
-            for part in q:
-                if part.strip(): suggestions.append(part.strip())
+        text = match.group(1).strip()
+        lines = text.split('\n')
+        for line in lines:
+            # Вычищаем цифры (1. 2.), маркеры и скобки
+            clean_line = re.sub(r'^[\d\.\)\-\*\[\]\s]+', '', line).strip()
+            clean_line = re.sub(r'\]$', '', clean_line).strip()
+            if clean_line and clean_line.endswith('?'):
+                suggestions.append(clean_line)
+                
+    # Фолбэк: если блок не найден, просто ищем вопросительные предложения в конце ответа
+    if not suggestions:
+        lines = answer.split('\n')
+        for line in reversed(lines[-7:]): # Смотрим последние 7 строк
+            if '?' in line:
+                clean_line = re.sub(r'^[\d\.\)\-\*\[\]\s]+', '', line).strip()
+                clean_line = re.sub(r'\]$', '', clean_line).strip()
+                if clean_line and clean_line.endswith('?'):
+                    if clean_line not in suggestions:
+                        suggestions.insert(0, clean_line)
+                        
     return suggestions[:3]
 
 def clean_answer(answer: str) -> str:
-    """Удаляет текстовый блок вопросов из ответа (так как они становятся кнопками)"""
-    return re.sub(r'\n*🎯\s*УТОЧНЯЮЩИЕ\s*ВОПРОСЫ[:\s]*\n?.*', '', answer, flags=re.DOTALL | re.IGNORECASE).strip()
+    """Вырезает из текста ответы блок вопросов, так как они становятся интерактивными кнопками"""
+    ans = re.sub(r'\n*(🎯|💡)?\s*УТОЧНЯЮЩИЕ\s*ВОПРОСЫ[:\s]*.*', '', answer, flags=re.DOTALL | re.IGNORECASE)
+    return ans.strip()
 
 
 # === 7. ГЛУБОКИЙ СИСТЕМНЫЙ ПРОМПТ И YANDEX GPT ===
@@ -317,10 +317,10 @@ DEEP_SYSTEM_PROMPT = """
 ПРАВИЛА ФОРМИРОВАНИЯ ОТВЕТА (КРИТИЧЕСКИ ВАЖНО):
 
 1. СТРУКТУРА ОТВЕТА (Соблюдать жестко):
-📌 **ЗАКЛЮЧЕНИЕ** (1-2 предложения — прямой ответ на вопрос пользователя: разрешено, запрещено, возможно при определенных условиях).
-📖 **ПРАВОВОЕ ОБОСНОВАНИЕ** (Детальный разбор ситуации. ОБЯЗАТЕЛЬНО ссылайся на конкретные пункты и статьи предоставленных документов. Пример: "На основании п. 5.1 Положения о текущем контроле..."). 
+📌 **ЗАКЛЮЧЕНИЕ** (1-2 предложения — суть ответа: разрешено, запрещено, возможно при условиях).
+📖 **ПРАВОВОЕ ОБОСНОВАНИЕ** (Детальный разбор ситуации. ОБЯЗАТЕЛЬНО ссылайся на конкретные пункты и статьи предоставленных документов). 
 📋 **ПОРЯДОК ДЕЙСТВИЙ** (Если применимо — напиши пошаговый алгоритм действий для студента).
-📎 **ДОКУМЕНТЫ** (Краткий перечень актов, которые регулируют данный вопрос).
+📎 **ДОКУМЕНТЫ** (Краткий перечень актов, которые были использованы).
 
 2. АНАЛИЗ И КРИТИЧЕСКОЕ МЫШЛЕНИЕ:
 - Внимательно читай КОНТЕКСТ. Если в локальных актах нет прямого ответа, но есть информация из блока "АКТУАЛЬНАЯ ИНФОРМАЦИЯ С САЙТА", используй её.
@@ -330,26 +330,24 @@ DEEP_SYSTEM_PROMPT = """
 В самом конце своего ответа ты ОБЯЗАН предложить 2-3 вопроса. 
 ОНИ ДОЛЖНЫ БЫТЬ СФОРМУЛИРОВАНЫ ОТ ЛИЦА СТУДЕНТА (пользователя), как будто он хочет задать тебе следующий вопрос, чтобы углубиться в тему.
 НЕ ЗАДАВАЙ вопросы пользователю (не пиши "Вам выслать бланк?"). ПРЕДЛАГАЙ ему готовые варианты!
-Формат вывода строго: 
-🎯 УТОЧНЯЮЩИЕ ВОПРОСЫ: [Вопрос 1?][Вопрос 2?]
+Формат вывода строго такой:
+УТОЧНЯЮЩИЕ ВОПРОСЫ:
+1. [Вопрос 1?]
+2.[Вопрос 2?]
 """
 
-def call_yandex_gpt(history, current_question, context, site_links, web_context):
+def call_yandex_gpt(history, current_question, context, site_links):
     url = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
     headers = {"Authorization": f"Api-Key {YANDEX_API_KEY}", "x-folder-id": FOLDER_ID}
     
-    # Сборка памяти диалога (передаем системный промпт и историю)
+    # Сборка сообщений с ПАМЯТЬЮ
     messages =[{"role": "system", "text": DEEP_SYSTEM_PROMPT}]
-    for msg in history[-6:]: # Помним последние 6 реплик для хорошего контекста
+    for msg in history[-6:]: 
         role = "assistant" if msg["role"] == "assistant" else "user"
         messages.append({"role": role, "text": msg["content"]})
     
-    # Формируем тело финального запроса с учетом RAG и Парсинга
-    user_payload = f"ВЫДЕРЖКИ ИЗ НОРМАТИВНЫХ АКТОВ:\n{context}\n"
-    if web_context:
-        user_payload += f"\n{web_context}\n"
-        
-    user_payload += f"\nВОПРОС ПОЛЬЗОВАТЕЛЯ: {current_question}\n\nДай ответ строго по структуре, с обоснованием и утоняющими вопросами от лица студента в конце."
+    links_text = "\n".join([f"- {l['title']}: {l['url']}" for l in site_links])
+    user_payload = f"КОНТЕКСТ ИЗ ДОКУМЕНТОВ:\n{context}\n\nРЕЛЕВАНТНЫЕ ССЫЛКИ НА САЙТЕ:\n{links_text}\n\nВОПРОС ПОЛЬЗОВАТЕЛЯ: {current_question}"
     messages.append({"role": "user", "text": user_payload})
 
     payload = {
@@ -359,19 +357,14 @@ def call_yandex_gpt(history, current_question, context, site_links, web_context)
     }
     
     res = requests.post(url, headers=headers, json=payload)
-    if res.status_code == 200: 
-        return res.json()['result']['alternatives'][0]['message']['text']
-    else: 
-        raise Exception(f"Ошибка YandexGPT: {res.text}")
+    if res.status_code == 200: return res.json()['result']['alternatives'][0]['message']['text']
+    else: raise Exception(f"Ошибка YandexGPT: {res.text}")
 
 def get_rag_response(question: str, chat_history: list):
-    # 1. Поиск по базе (FAISS)
     docs, sources = iterative_search(question)
-    
-    # 2. Поиск по маршрутизатору сайта
     site_links = find_link_in_index(question)
     
-    # 3. LIVE WEB SCRAPING (Парсинг сайта в реальном времени для критичных вопросов)
+    # 1. LIVE WEB SCRAPING
     live_web_context = ""
     q_low = question.lower()
     if any(word in q_low for word in['поступ', 'абитуриент', 'возраст', 'экзамен']):
@@ -387,15 +380,28 @@ def get_rag_response(question: str, chat_history: list):
     docs.sort(key=lambda x: x['stage'])
     context = "\n\n".join([f"--- ФРАГМЕНТ (Источник: {d['source']}) ---\n{d['content']}" for i, d in enumerate(docs[:15])])
     
+    # Объединяем локальную базу и сайт
+    full_context = context + live_web_context
+    
     try:
         # Вызов ИИ
-        raw_answer = call_yandex_gpt(chat_history, question, context, site_links, live_web_context)
+        raw_answer = call_yandex_gpt(chat_history, question, full_context, site_links)
         
-        # Формирование красивого блока источников с Markdown-гиперссылками на сайт
+        # ФОРМИРОВАНИЕ ПРЯМЫХ ГИПЕРССЫЛОК НА ДОКУМЕНТЫ
         clean_sources =[]
         for s in sources:
-            if s.strip():
-                clean_sources.append(f"📄 [{s}](https://sdamp.ru/sveden/document/)")
+            if not s.strip(): continue
+            doc_url = None
+            # Пытаемся найти точную ссылку на PDF файл в индексе сайта
+            for doc in site_index.get('documents',[]):
+                if s.lower() in doc.get('name', '').lower() or doc.get('name', '').lower() in s.lower():
+                    doc_url = doc.get('url')
+                    break
+            
+            if doc_url:
+                clean_sources.append(f"📄 [{s}]({doc_url})") # Прямая ссылка на PDF
+            else:
+                clean_sources.append(f"📄 {s}") # Просто название, если ссылки нет
         
         sources_text = "\n\n".join(clean_sources)
         
@@ -405,8 +411,13 @@ def get_rag_response(question: str, chat_history: list):
             
         suggestions = parse_suggestions(raw_answer)
         answer = clean_answer(raw_answer)
-        return answer, suggestions, sources_text
         
+        # Защита от галлюцинаций про возраст
+        if "возраст" in question.lower() or "лет" in question.lower():
+            if "60" in answer or "ограничений нет" in answer.lower():
+                answer += "\n\n⚠️ *Примечание методиста: Обратите внимание, что по актуальным правилам приема возраст абитуриентов, поступающих на бакалавриат, ограничен 35 годами (для очного) и 50 годами (для заочного).* (Уточните на сайте)."
+        
+        return answer, suggestions, sources_text
     except Exception as e:
         logger.error(f"Ошибка ИИ: {e}")
         return f"⚠️ Произошла техническая ошибка при обращении к ИИ: {e}",[], ""
@@ -430,7 +441,7 @@ for i, msg in enumerate(st.session_state.messages):
         # Отрисовка кнопки скачивания шаблона
         if msg.get("template") and os.path.exists(msg["template"]):
             with open(msg["template"], "rb") as f:
-                st.download_button("📥 Скачать документ", f.read(), file_name=os.path.basename(msg["template"]), key=f"dl_{i}_{uuid.uuid4()}")
+                st.download_button("📥 Скачать шаблон документа", f.read(), file_name=os.path.basename(msg["template"]), key=f"dl_{i}_{uuid.uuid4()}")
                 
         # Отрисовка источников
         if msg.get("sources"):
@@ -466,11 +477,10 @@ if prompt:
                 ans = f"📄 **Подготовил для вас официальный бланк:** {clean_document_name(fname)}\nПожалуйста, скачайте его, заполните и направьте в Учебную часть."
                 st.markdown(ans)
                 with open(t_path, "rb") as f: 
-                    st.download_button("📥 Скачать документ", f.read(), file_name=fname, key=f"dl_new_{uuid.uuid4()}")
+                    st.download_button("📥 Скачать шаблон документа", f.read(), file_name=fname, key=f"dl_new_{uuid.uuid4()}")
                 
                 st.session_state.messages.append({"role": "assistant", "content": ans, "template": t_path})
-                save_message(st.session_state.user_id, prompt, ans)
-                st.rerun()
+                save_message(st.session_state.user_id, prompt, ans); st.rerun()
                 
             else:
                 # Запускаем мощный RAG-конвейер
@@ -489,5 +499,4 @@ if prompt:
                     if st.button("👎 Нет", key=f"no_{uuid.uuid4()}"): save_feedback(st.session_state.user_id, prompt, False)
                 
                 st.session_state.messages.append({"role": "assistant", "content": answer, "sources": sources_text, "suggestions": suggestions})
-                save_message(st.session_state.user_id, prompt, answer)
-                st.rerun()
+                save_message(st.session_state.user_id, prompt, answer); st.rerun()
