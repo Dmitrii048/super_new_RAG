@@ -10,11 +10,10 @@ import requests
 from datetime import datetime
 from bs4 import BeautifulSoup
 
-# Импорты RAG
+
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 
-# === 1. НАСТРОЙКИ И СЕКРЕТЫ ===
 try:
     YANDEX_API_KEY = st.secrets["YANDEX_API_KEY"]
 except:
@@ -30,7 +29,7 @@ DB_FILE = "chat_history.db"
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# === 2. НАСТРОЙКА ИНТЕРФЕЙСА (АКАДЕМИЧЕСКИЙ ДИЗАЙН) ===
+
 st.set_page_config(page_title="Юридический ассистент СДА", page_icon="🎓", layout="centered")
 
 st.markdown("""
@@ -104,7 +103,6 @@ st.markdown("""
 if "user_id" not in st.session_state:
     st.session_state.user_id = str(uuid.uuid4())
 
-# === 3. БАЗА ДАННЫХ SQLITE ===
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     conn.execute('''CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, username TEXT, question TEXT, answer TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)''')
@@ -130,7 +128,6 @@ def save_feedback(user_id, question, is_positive):
         conn.close()
     except Exception as e: logger.error(f"Ошибка БД (оценки): {e}")
 
-# === 4. ЗАГРУЗКА РЕСУРСОВ ===
 @st.cache_resource
 def load_resources():
     site_index = {'pages':[], 'documents':[]}
@@ -138,16 +135,16 @@ def load_resources():
         try:
             with open(SITE_INDEX_FILE, 'r', encoding='utf-8') as f:
                 site_index = json.load(f)
-            logger.info("✅ Индекс сайта успешно загружен")
+            logger.info("Индекс сайта успешно загружен")
         except: pass
 
-    logger.info("⏳ Инициализация эмбеддингов...")
+    logger.info("Инициализация эмбеддингов...")
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
     
     if os.path.exists(DB_PATH):
         db = FAISS.load_local(DB_PATH, embeddings, allow_dangerous_deserialization=True)
     else:
-        st.error(f"⚠️ Критическая ошибка: База {DB_PATH} не найдена на сервере!")
+        st.error(f"Критическая ошибка: База {DB_PATH} не найдена на сервере!")
         return None, site_index
 
     t_db_path = DB_PATH + "_templates"
@@ -159,7 +156,6 @@ def load_resources():
 
 db, site_index = load_resources()
 
-# === 5. ПАРСИНГ САЙТА В РЕАЛЬНОМ ВРЕМЕНИ ===
 def scrape_website_content(url: str) -> str:
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
@@ -175,7 +171,6 @@ def scrape_website_content(url: str) -> str:
         logger.error(f"Ошибка парсинга {url}: {e}")
     return ""
 
-# === 6. ЛОГИКА ПОИСКА И ОЧИСТКИ ТЕКСТОВ ===
 def clean_document_name(filename: str) -> str:
     name = urllib.parse.unquote(filename)
     name = re.sub(r'\.(docx?|pdf|txt)$', '', name, flags=re.IGNORECASE)
@@ -273,10 +268,9 @@ def find_template(user_query: str) -> str | None:
     return None
 
 def parse_suggestions(answer: str) -> list:
-    """Бронебойный парсер: вытаскивает вопросы в формате кнопок, как бы ИИ их ни написал"""
+    """."""
     suggestions =[]
-    
-    # Пытаемся найти блок "УТОЧНЯЮЩИЕ ВОПРОСЫ"
+
     match = re.search(r'УТОЧНЯЮЩИЕ\s*ВОПРОСЫ[:\s]*\n*(.+)', answer, re.IGNORECASE | re.DOTALL)
     if match:
         text = match.group(1).strip()
@@ -288,10 +282,10 @@ def parse_suggestions(answer: str) -> list:
             if clean_line and clean_line.endswith('?'):
                 suggestions.append(clean_line)
                 
-    # Фолбэк: если блок не найден, просто ищем вопросительные предложения в конце ответа
+
     if not suggestions:
         lines = answer.split('\n')
-        for line in reversed(lines[-7:]): # Смотрим последние 7 строк
+        for line in reversed(lines[-7:]): 
             if '?' in line:
                 clean_line = re.sub(r'^[\d\.\)\-\*\[\]\s]+', '', line).strip()
                 clean_line = re.sub(r'\]$', '', clean_line).strip()
@@ -303,11 +297,10 @@ def parse_suggestions(answer: str) -> list:
 
 def clean_answer(answer: str) -> str:
     """Вырезает из текста ответы блок вопросов, так как они становятся интерактивными кнопками"""
-    ans = re.sub(r'\n*(🎯|💡)?\s*УТОЧНЯЮЩИЕ\s*ВОПРОСЫ[:\s]*.*', '', answer, flags=re.DOTALL | re.IGNORECASE)
+    ans = re.sub(r'\n*?\s*УТОЧНЯЮЩИЕ\s*ВОПРОСЫ[:\s]*.*', '', answer, flags=re.DOTALL | re.IGNORECASE)
     return ans.strip()
 
 
-# === 7. ГЛУБОКИЙ СИСТЕМНЫЙ ПРОМПТ И YANDEX GPT ===
 DEEP_SYSTEM_PROMPT = """
 Ты — Интеллектуальный юридический ассистент Сретенской духовной академии (СДА). 
 Твоя роль — вежливый, эрудированный и внимательный эксперт-методист. Ты в совершенстве знаешь локальную нормативную базу Академии и ФЗ-273 "Об образовании".
@@ -364,7 +357,7 @@ def get_rag_response(question: str, chat_history: list):
     docs, sources = iterative_search(question)
     site_links = find_link_in_index(question)
     
-    # 1. LIVE WEB SCRAPING
+
     live_web_context = ""
     q_low = question.lower()
     if any(word in q_low for word in['поступ', 'абитуриент', 'возраст', 'экзамен']):
@@ -375,24 +368,23 @@ def get_rag_response(question: str, chat_history: list):
         if web_text: live_web_context = f"\n--- АКТУАЛЬНАЯ ИНФОРМАЦИЯ С САЙТА (Стипендии) ---\n{web_text}"
 
     if not docs and not live_web_context: 
-        return "😔 В официальных документах и на сайте Академии ответ на данный вопрос не найден. Рекомендую обратиться в Учебную часть СДА.",[], ""
+        return "😔 В официальных документах и на сайте Академии ответ на данный вопрос не найден. Рекомендую обратиться в Учебную часть Академии.",[], ""
 
     docs.sort(key=lambda x: x['stage'])
     context = "\n\n".join([f"--- ФРАГМЕНТ (Источник: {d['source']}) ---\n{d['content']}" for i, d in enumerate(docs[:15])])
     
-    # Объединяем локальную базу и сайт
+
     full_context = context + live_web_context
     
     try:
-        # Вызов ИИ
+
         raw_answer = call_yandex_gpt(chat_history, question, full_context, site_links)
         
-        # ФОРМИРОВАНИЕ ПРЯМЫХ ГИПЕРССЫЛОК НА ДОКУМЕНТЫ
+
         clean_sources =[]
         for s in sources:
             if not s.strip(): continue
             doc_url = None
-            # Пытаемся найти точную ссылку на PDF файл в индексе сайта
             for doc in site_index.get('documents',[]):
                 if s.lower() in doc.get('name', '').lower() or doc.get('name', '').lower() in s.lower():
                     doc_url = doc.get('url')
@@ -412,15 +404,15 @@ def get_rag_response(question: str, chat_history: list):
         suggestions = parse_suggestions(raw_answer)
         answer = clean_answer(raw_answer)
         
-        # Защита от галлюцинаций про возраст
+
         if "возраст" in question.lower() or "лет" in question.lower():
             if "60" in answer or "ограничений нет" in answer.lower():
-                answer += "\n\n⚠️ *Примечание методиста: Обратите внимание, что по актуальным правилам приема возраст абитуриентов, поступающих на бакалавриат, ограничен 35 годами (для очного) и 50 годами (для заочного).* (Уточните на сайте)."
+                answer += "\n\n *Примечание методиста: Обратите внимание, что по актуальным правилам приема возраст абитуриентов, поступающих на бакалавриат, ограничен 35 годами (для очного) и 50 годами (для заочного).* (Уточните на сайте)."
         
         return answer, suggestions, sources_text
     except Exception as e:
         logger.error(f"Ошибка ИИ: {e}")
-        return f"⚠️ Произошла техническая ошибка при обращении к ИИ: {e}",[], ""
+        return f"Произошла техническая ошибка при обращении к ИИ: {e}",[], ""
 
 
 # === 8. ГЛАВНЫЙ ИНТЕРФЕЙС ===
@@ -450,7 +442,7 @@ for i, msg in enumerate(st.session_state.messages):
         
         # Интерактивные вопросы (только для последнего ответа)
         if msg.get("suggestions") and msg["role"] == "assistant" and i == len(st.session_state.messages)-1:
-            st.markdown("💡 *Возможно, вас заинтересует:*")
+            st.markdown("*Возможно, вас заинтересует:*")
             for sug in msg["suggestions"]:
                 if st.button(sug, key=f"sug_{i}_{sug}"):
                     st.session_state.suggestion_clicked = sug; st.rerun()
@@ -477,7 +469,7 @@ if prompt:
                 ans = f"📄 **Подготовил для вас официальный бланк:** {clean_document_name(fname)}\nПожалуйста, скачайте его, заполните и направьте в Учебную часть."
                 st.markdown(ans)
                 with open(t_path, "rb") as f: 
-                    st.download_button("📥 Скачать шаблон документа", f.read(), file_name=fname, key=f"dl_new_{uuid.uuid4()}")
+                    st.download_button("Скачать шаблон документа", f.read(), file_name=fname, key=f"dl_new_{uuid.uuid4()}")
                 
                 st.session_state.messages.append({"role": "assistant", "content": ans, "template": t_path})
                 save_message(st.session_state.user_id, prompt, ans); st.rerun()
@@ -488,7 +480,7 @@ if prompt:
                 
                 st.markdown(answer)
                 if sources_text:
-                    with st.expander("📚 Ссылки на официальные документы"): 
+                    with st.expander("Ссылки на официальные документы"): 
                         st.markdown(sources_text)
                 
                 # Кнопки оценки работы
